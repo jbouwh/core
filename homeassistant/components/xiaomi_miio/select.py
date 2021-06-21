@@ -16,9 +16,8 @@ import voluptuous as vol
 from homeassistant.config_entries import SOURCE_IMPORT
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_MODE, ATTR_TEMPERATURE
 import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.selector import BooleanSelector, NumberSelector, Selector
 
-from .const import (  # MODEL_AIRPURIFIER_2H,; MODEL_AIRPURIFIER_2S,; MODEL_AIRPURIFIER_PRO,; MODEL_AIRPURIFIER_PRO_V7,; MODEL_AIRPURIFIER_V3,; MODELS_FAN,; MODELS_HUMIDIFIER_MIOT,; MODELS_PURIFIER_MIOT,
+from .const import (  # MODEL_AIRPURIFIER_2H,; MODEL_AIRPURIFIER_2S,; MODEL_AIRPURIFIER_PRO,; MODEL_AIRPURIFIER_PRO_V7,; MODEL_AIRPURIFIER_V3,; MODELS_FAN,; MODELS_HUMIDIFIER_MIOT,; MODELS_PURIFIER_MIOT,; MODELS_HUMIDIFIER,; MODELS_HUMIDIFIER_MIOT,
     CONF_DEVICE,
     CONF_FLOW_TYPE,
     DOMAIN,
@@ -49,6 +48,9 @@ from .const import (  # MODEL_AIRPURIFIER_2H,; MODEL_AIRPURIFIER_2S,; MODEL_AIRP
     SERVICE_SET_VOLUME,
 )
 from .device import XiaomiCoordinatedMiioEntity
+
+# from homeassistant.components.select import SelectEntity
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -278,39 +280,6 @@ AVAILABLE_ATTRIBUTES_AIRFRESH = {
     ATTR_EXTRA_FEATURES: "extra_features",
 }
 
-OPERATION_MODES_AIRPURIFIER = ["Auto", "Silent", "Favorite", "Idle"]
-PRESET_MODES_AIRPURIFIER = ["Auto", "Silent", "Favorite", "Idle"]
-OPERATION_MODES_AIRPURIFIER_PRO = ["Auto", "Silent", "Favorite"]
-PRESET_MODES_AIRPURIFIER_PRO = ["Auto", "Silent", "Favorite"]
-OPERATION_MODES_AIRPURIFIER_PRO_V7 = OPERATION_MODES_AIRPURIFIER_PRO
-PRESET_MODES_AIRPURIFIER_PRO_V7 = PRESET_MODES_AIRPURIFIER_PRO
-OPERATION_MODES_AIRPURIFIER_2S = ["Auto", "Silent", "Favorite"]
-PRESET_MODES_AIRPURIFIER_2S = ["Auto", "Silent", "Favorite"]
-OPERATION_MODES_AIRPURIFIER_3 = ["Auto", "Silent", "Favorite", "Fan"]
-PRESET_MODES_AIRPURIFIER_3 = ["Auto", "Silent", "Favorite", "Fan"]
-OPERATION_MODES_AIRPURIFIER_V3 = [
-    "Auto",
-    "Silent",
-    "Favorite",
-    "Idle",
-    "Medium",
-    "High",
-    "Strong",
-]
-PRESET_MODES_AIRPURIFIER_V3 = [
-    "Auto",
-    "Silent",
-    "Favorite",
-    "Idle",
-    "Medium",
-    "High",
-    "Strong",
-]
-OPERATION_MODES_AIRFRESH = ["Auto", "Silent", "Interval", "Low", "Middle", "Strong"]
-PRESET_MODES_AIRFRESH = ["Auto", "Interval"]
-PRESET_MODES_AIRHUMIDIFIER = ["Auto"]
-PRESET_MODES_AIRHUMIDIFIER_CA4 = ["Auto"]
-
 SUCCESS = ["ok"]
 
 FEATURE_SET_BUZZER = 1
@@ -482,10 +451,17 @@ SERVICE_TO_METHOD = {
 }
 
 
+class SelectEntity:
+    """Temporary class beform merging dev."""
+
+    pass
+
+
 @dataclass
 class SelectorType:
     """Class that holds device specific info for a xiaomi aqara or humidifier selectors."""
 
+    name: str = None
     unit_of_measurement: str = None
     icon: str = None
     device_class: str = None
@@ -494,19 +470,13 @@ class SelectorType:
     mode: str = None
     options: list = None
     step: float = None
-    selector_class: Selector = None
 
 
 SELECTOR_TYPES = {
-    "motor_speed": SelectorType(
-        unit_of_measurement="rpm",
-        min=200,
-        max=2000,
-        step=10,
-        selector_class=NumberSelector,
-    ),
-    "dry_mode": SelectorType(
-        selector_class=BooleanSelector,
+    FEATURE_SET_LED_BRIGHTNESS: SelectorType(
+        name="Led brightness",
+        short_name=ATTR_LED_BRIGHTNESS,
+        options={"Bright": 0, "Dim": 1, "Off": 2},
     ),
 }
 
@@ -532,32 +502,42 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     if config_entry.data[CONF_FLOW_TYPE] == CONF_DEVICE:
         # host = config_entry.data[CONF_HOST]
         # token = config_entry.data[CONF_TOKEN]
-        # model = config_entry.data[CONF_MODEL]
+        model = config_entry.data[CONF_MODEL]
         device = hass.data[DOMAIN][config_entry.entry_id][KEY_DEVICE]
         coordinator = hass.data[DOMAIN][config_entry.entry_id][KEY_COORDINATOR]
-        selectors = []
+        device_features = 0
 
-        for selector in selectors:
-            entities.append(
-                XiaomiSelector(
-                    f"{config_entry.title}_{selector}",
-                    device,
-                    config_entry,
-                    f"{selector}_{config_entry.unique_id}",
-                    selector,
-                    coordinator,
+        if model in [MODEL_AIRHUMIDIFIER_CA1, MODEL_AIRHUMIDIFIER_CB1]:
+            device_features = FEATURE_FLAGS_AIRHUMIDIFIER_CA_AND_CB
+            # available_attributes = AVAILABLE_ATTRIBUTES_AIRHUMIDIFIER_CA_AND_CB
+        elif model in [MODEL_AIRHUMIDIFIER_CA4]:
+            device_features = FEATURE_FLAGS_AIRHUMIDIFIER_CA4
+            # available_attributes = AVAILABLE_ATTRIBUTES_AIRHUMIDIFIER_CA4
+        else:
+            return
+
+        for feature in SELECTOR_TYPES:
+            controller = SELECTOR_TYPES[feature]
+            if feature & device_features and feature in SELECTOR_TYPES:
+                entities.append(
+                    XiaomiSelector(
+                        f"{config_entry.title}_{controller.name}",
+                        device,
+                        config_entry,
+                        f"{controller.short_name}_{config_entry.unique_id}",
+                        coordinator,
+                    )
                 )
-            )
 
     async_add_entities(entities, update_before_add=True)
 
 
-class XiaomiSelector(XiaomiCoordinatedMiioEntity, Selector):
+class XiaomiSelector(XiaomiCoordinatedMiioEntity, SelectEntity):
     """Representation of a generic Xiaomi attribute selector."""
 
     def __init__(self, name, device, entry, unique_id, coordinator):
         """Initialize the generic Xiaomi attribute selector."""
-        super().__init__(name, device, entry, unique_id, coordinator=coordinator)
+        super().__init__(name, device, entry, unique_id, coordinator)
         self._state = None
         self._supported_features = 0
         self._device_features = 0
