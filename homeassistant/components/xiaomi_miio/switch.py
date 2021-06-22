@@ -388,7 +388,9 @@ class XiaomiGenericCoordinatedSwitch(XiaomiCoordinatedMiioEntity, SwitchEntity):
     @property
     def is_on(self):
         """Return the current option."""
-        return self._state
+        if self.available:
+            return self._state
+        return None
 
     @staticmethod
     def _extract_value_from_attribute(state, attribute):
