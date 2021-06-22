@@ -27,6 +27,7 @@ from .const import (
     MODEL_AIRHUMIDIFIER_CA1,
     MODEL_AIRHUMIDIFIER_CA4,
     MODEL_AIRHUMIDIFIER_CB1,
+    MODELS_HUMIDIFIER,
     SERVICE_SET_LED_BRIGHTNESS,
 )
 from .device import XiaomiCoordinatedMiioEntity
@@ -76,6 +77,7 @@ class SelectorType:
 SELECTOR_TYPES = {
     FEATURE_SET_LED_BRIGHTNESS: SelectorType(
         name="Led brightness",
+        icon="mdi:brightness-6",
         short_name=ATTR_LED_BRIGHTNESS,
         options=["Bright", "Dim", "Off"],
         service=SERVICE_SET_LED_BRIGHTNESS,
@@ -108,26 +110,32 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         device = hass.data[DOMAIN][config_entry.entry_id][KEY_DEVICE]
         coordinator = hass.data[DOMAIN][config_entry.entry_id][KEY_COORDINATOR]
         device_features = 0
+        entity_class = None
 
         _LOGGER.debug("Initializing with host %s (token %s...)", host, token[:5])
 
         if model in [MODEL_AIRHUMIDIFIER_CA1, MODEL_AIRHUMIDIFIER_CB1]:
             device_features = FEATURE_FLAGS_AIRHUMIDIFIER_CA_AND_CB
+            entity_class = XiaomiAirHumidifierSelector
         elif model in [MODEL_AIRHUMIDIFIER_CA4]:
             device_features = FEATURE_FLAGS_AIRHUMIDIFIER_CA4
+            entity_class = XiaomiAirHumidifierMiotSelector
+        elif model in MODELS_HUMIDIFIER:
+            device_features = FEATURE_FLAGS_AIRHUMIDIFIER
+            entity_class = XiaomiAirHumidifierSelector
         else:
             return
 
         for feature in SELECTOR_TYPES:
-            controller = SELECTOR_TYPES[feature]
+            selector = SELECTOR_TYPES[feature]
             if feature & device_features and feature in SELECTOR_TYPES:
                 entities.append(
-                    XiaomiAirHumidifierMiotSelector(
-                        f"{config_entry.title} {controller.name}",
+                    entity_class(
+                        f"{config_entry.title} {selector.name}",
                         device,
                         config_entry,
-                        f"{controller.short_name}_{config_entry.unique_id}",
-                        controller,
+                        f"{selector.short_name}_{config_entry.unique_id}",
+                        selector,
                         coordinator,
                     )
                 )
@@ -138,14 +146,16 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 class XiaomiSelector(XiaomiCoordinatedMiioEntity, SelectEntity):
     """Representation of a generic Xiaomi attribute selector."""
 
-    def __init__(self, name, device, entry, unique_id, controller, coordinator):
+    def __init__(self, name, device, entry, unique_id, selector, coordinator):
         """Initialize the generic Xiaomi attribute selector."""
         super().__init__(name, device, entry, unique_id, coordinator)
         self._state = None
+        self._attr_icon = selector.icon
+        self._attr_unit_of_measurement = selector.unit_of_measurement
         self._supported_features = 0
         self._device_features = 0
         self._state_attrs = {}
-        self._controller = controller
+        self._controller = selector
         self._current_option = None
         self._enum_class = None
         self._attributes = None
