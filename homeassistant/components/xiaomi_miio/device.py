@@ -142,7 +142,9 @@ class XiaomiCoordinatedMiioEntity(CoordinatorEntity):
             )
 
             _LOGGER.debug("Response received from miio device: %s", result)
-
+            # refresh the state
+            self._available = False
+            await self.coordinator.async_request_refresh()
             return result == SUCCESS
         except DeviceException as exc:
             if self._available:
