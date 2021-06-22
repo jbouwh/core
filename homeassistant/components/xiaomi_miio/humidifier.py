@@ -230,14 +230,14 @@ class XiaomiAirHumidifier(XiaomiGenericHumidifier, HumidifierEntity):
     @property
     def mode(self):
         """Return the current mode."""
-        if self._state:
+        if self._state and self.available:
             return AirhumidifierOperationMode(self._attributes[ATTR_MODE]).name
         return None
 
     @property
     def target_humidity(self):
         """Return the target humidity."""
-        if self._state:
+        if self._state and self.available:
             return (
                 self._attributes[ATTR_TARGET_HUMIDITY]
                 if AirhumidifierOperationMode(self._attributes[ATTR_MODE])
