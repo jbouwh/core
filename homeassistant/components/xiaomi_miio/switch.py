@@ -157,7 +157,7 @@ SERVICE_TO_METHOD = {
 
 @dataclass
 class SwitchType:
-    """Class that holds device specific info for a xiaomi aqara or humidifier selectors."""
+    """Class that holds device specific info for a xiaomi aqara or humidifiers."""
 
     name: str = None
     short_name: str = None
