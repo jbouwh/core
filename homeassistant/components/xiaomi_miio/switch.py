@@ -157,12 +157,6 @@ SERVICE_TO_METHOD = {
 
 @dataclass
 class SwitchType:
-<<<<<<< HEAD
-    """Class that holds device specific info for a xiaomi aqara or humidifiers."""
-=======
-    """Class that holds device specific info for a xiaomi aqara or humidifier selectors."""
->>>>>>> Implement buzzer, child_lock and dry mode
-
     name: str = None
     short_name: str = None
     unit_of_measurement: str = None

@@ -17,6 +17,7 @@ from homeassistant.core import callback
 from .const import (
     CONF_DEVICE,
     CONF_FLOW_TYPE,
+    CONF_MODEL,
     DOMAIN,
     FEATURE_FLAGS_AIRHUMIDIFIER,
     FEATURE_FLAGS_AIRHUMIDIFIER_CA4,
@@ -32,20 +33,7 @@ from .const import (
 )
 from .device import XiaomiCoordinatedMiioEntity
 
-# from miio.airpurifier import LedBrightness as AirpurifierLedBrightness
-# from miio.airpurifier_miot import LedBrightness as AirpurifierMiotLedBrightness
-
-
 _LOGGER = logging.getLogger(__name__)
-
-DEFAULT_NAME = "Xiaomi Miio Device"
-DATA_KEY = "fan.xiaomi_miio"
-
-CONF_MODEL = "model"
-
-ATTR_MODEL = "model"
-
-SUCCESS = ["ok"]
 
 ATTR_LED_BRIGHTNESS = "led_brightness"
 
