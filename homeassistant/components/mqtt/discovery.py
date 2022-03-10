@@ -7,15 +7,15 @@ import logging
 import re
 import time
 
-from homeassistant.const import CONF_DEVICE, CONF_PLATFORM
+from homeassistant.const import CONF_DEVICE, CONF_PLATFORM, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import RESULT_TYPE_ABORT
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.discovery import async_load_platform
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
 )
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.loader import async_get_mqtt
 
 from .. import mqtt
@@ -235,13 +235,14 @@ async def async_start(  # noqa: C901
 
                         await device_automation.async_setup_entry(hass, config_entry)
                     elif component in "notify":
-                        # Local import to avoid circular dependencies
-                        # pylint: disable=import-outside-toplevel
-                        from . import notify
-
-                        await notify.async_setup_entry(
-                            hass, config_entry, AddEntitiesCallback
+                        notify_setup = functools.partial(
+                            async_load_platform,
+                            hass,
+                            Platform.NOTIFY,
+                            DOMAIN,
+                            hass_config=config_entry,
                         )
+                        await async_load_platform_helper(hass, "notify", notify_setup)
                     elif component in "tag":
                         # Local import to avoid circular dependencies
                         # pylint: disable-next=import-outside-toplevel
@@ -341,3 +342,25 @@ async def async_stop(hass: HomeAssistant) -> None:
         for key, unsub in list(hass.data[INTEGRATION_UNSUBSCRIBE].items()):
             unsub()
             hass.data[INTEGRATION_UNSUBSCRIBE].pop(key)
+
+
+async def async_load_platform_helper(hass, platform, async_setup):
+    """Set up platform for notify service creation dynamically through MQTT discovery."""
+
+    async def async_discover(discovery_payload):
+        """Discover and add an MQTT notify service."""
+        discovery_data = discovery_payload.discovery_data
+        await async_setup(discovery_payload)
+        try:
+            pass
+        except Exception:
+            discovery_hash = discovery_data[ATTR_DISCOVERY_HASH]
+            clear_discovery_hash(hass, discovery_hash)
+            async_dispatcher_send(
+                hass, MQTT_DISCOVERY_DONE.format(discovery_hash), None
+            )
+            raise
+
+    async_dispatcher_connect(
+        hass, MQTT_DISCOVERY_NEW.format(platform, DOMAIN), async_discover
+    )

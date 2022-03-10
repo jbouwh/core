@@ -1,9 +1,8 @@
 """Support for MQTT notify."""
 from __future__ import annotations
 
-import functools
 import logging
-from typing import Any, Final, TypedDict, cast
+from typing import Final, TypedDict, cast
 
 import voluptuous as vol
 
@@ -18,7 +17,6 @@ from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
 )
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.reload import async_setup_reload_service
 from homeassistant.helpers.template import Template
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
@@ -28,7 +26,6 @@ from . import PLATFORMS, MqttCommandTemplate
 from .. import mqtt
 from .const import (
     ATTR_DISCOVERY_HASH,
-    ATTR_DISCOVERY_PAYLOAD,
     CONF_COMMAND_TEMPLATE,
     CONF_COMMAND_TOPIC,
     CONF_ENCODING,
@@ -39,7 +36,6 @@ from .const import (
 from .discovery import MQTT_DISCOVERY_DONE, MQTT_DISCOVERY_UPDATED, clear_discovery_hash
 from .mixins import (
     MQTT_ENTITY_DEVICE_INFO_SCHEMA,
-    async_setup_entry_helper,
     cleanup_device_registry,
     device_info_from_config,
 )
@@ -120,59 +116,34 @@ def _check_notify_service_name(
     return service_name
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up MQTT notify service dynamically through MQTT discovery."""
-    await async_initialize(hass)
-    setup = functools.partial(_async_setup_notify, hass, config_entry=config_entry)
-    await async_setup_entry_helper(hass, notify.DOMAIN, setup, DISCOVERY_SCHEMA)
-
-
-async def _async_setup_notify(
-    hass,
-    legacy_config: ConfigType,
-    config_entry: ConfigEntry,
-    discovery_data: dict[str, Any],
-):
-    """Set up the MQTT notify service with auto discovery."""
-    config: MqttNotificationConfig = DISCOVERY_SCHEMA(
-        discovery_data[ATTR_DISCOVERY_PAYLOAD]
-    )
-    discovery_hash = discovery_data[ATTR_DISCOVERY_HASH]
-
-    if not (service_name := _check_notify_service_name(hass, config)):
-        async_dispatcher_send(hass, MQTT_DISCOVERY_DONE.format(discovery_hash), None)
-        clear_discovery_hash(hass, discovery_hash)
-        return
-
-    device_id = _update_device(hass, config_entry, config)
-
-    service = MqttNotificationService(
-        hass,
-        config,
-        config_entry,
-        device_id,
-        discovery_hash,
-    )
-    hass.data[MQTT_NOTIFY_SERVICES_SETUP][service_name] = service
-
-    await service.async_setup(hass, service_name, service_name)
-    await service.async_register_services()
-
-
 async def async_get_service(
     hass: HomeAssistant,
     config: ConfigType,
-    discovery_info: DiscoveryInfoType | None = None,
+    discovery_info=None,
 ) -> MqttNotificationService | None:
     """Prepare the MQTT notification service through configuration.yaml."""
+    device_id: str | None = None
+    discovery_hash: tuple | None = None
+    config_entry: ConfigEntry = hass.data[DOMAIN].config_entry
+    notification_config: MqttNotificationConfig
     await async_initialize(hass)
-    notification_config: MqttNotificationConfig = cast(MqttNotificationConfig, config)
+    if discovery_info:
+        # Setup through auto discovery
+        notification_config = DISCOVERY_SCHEMA(discovery_info)
+        device_id = _update_device(hass, config_entry, notification_config)
+        discovery_data = discovery_info.discovery_data
+        discovery_hash = discovery_data[ATTR_DISCOVERY_HASH]
+    else:
+        # Setup through configuration.yaml
+        notification_config = cast(MqttNotificationConfig, config)
 
     if not (service_name := _check_notify_service_name(hass, notification_config)):
+        # A service already exist, abort the setup
+        if discovery_hash is not None:
+            async_dispatcher_send(
+                hass, MQTT_DISCOVERY_DONE.format(discovery_hash), None
+            )
+            clear_discovery_hash(hass, discovery_hash)
         return None
 
     service = hass.data[MQTT_NOTIFY_SERVICES_SETUP][
@@ -180,6 +151,9 @@ async def async_get_service(
     ] = MqttNotificationService(
         hass,
         notification_config,
+        config_entry=config_entry,
+        device_id=device_id,
+        discovery_hash=discovery_hash,
     )
     return service
 
@@ -332,7 +306,7 @@ class MqttNotificationService(notify.BaseNotificationService):
             if self._service_name in services:
                 del services[self._service_name]
             self._config = config
-            self._service_name = new_service_name
+            await self.async_setup(self.hass, new_service_name, new_service_name)
             await self.async_register_services()
             services[new_service_name] = self
         else:
