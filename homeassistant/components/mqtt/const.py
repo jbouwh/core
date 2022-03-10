@@ -31,6 +31,7 @@ CONF_TLS_INSECURE = "tls_insecure"
 CONF_TLS_VERSION = "tls_version"
 
 DATA_MQTT_CONFIG = "mqtt_config"
+DATA_MQTT_SETUP_CONFIG = "mqtt_setup_config"
 DATA_MQTT_RELOAD_NEEDED = "mqtt_reload_needed"
 
 DEFAULT_PREFIX = "homeassistant"

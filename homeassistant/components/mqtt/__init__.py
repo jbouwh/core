@@ -84,6 +84,7 @@ from .const import (
     CONF_WILL_MESSAGE,
     DATA_MQTT_CONFIG,
     DATA_MQTT_RELOAD_NEEDED,
+    DATA_MQTT_SETUP_CONFIG,
     DEFAULT_BIRTH,
     DEFAULT_DISCOVERY,
     DEFAULT_ENCODING,
@@ -580,6 +581,7 @@ async def _async_setup_discovery(
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Start the MQTT protocol service."""
+    hass.data[DATA_MQTT_SETUP_CONFIG] = config
     conf: ConfigType | None = config.get(DOMAIN)
 
     websocket_api.async_register_command(hass, websocket_subscribe)

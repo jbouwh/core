@@ -33,7 +33,12 @@ from .const import (
     CONF_RETAIN,
     DOMAIN,
 )
-from .discovery import MQTT_DISCOVERY_DONE, MQTT_DISCOVERY_UPDATED, clear_discovery_hash
+from .discovery import (
+    MQTT_DISCOVERY_DONE,
+    MQTT_DISCOVERY_UPDATED,
+    MQTTConfig,
+    clear_discovery_hash,
+)
 from .mixins import (
     MQTT_ENTITY_DEVICE_INFO_SCHEMA,
     cleanup_device_registry,
@@ -119,7 +124,7 @@ def _check_notify_service_name(
 async def async_get_service(
     hass: HomeAssistant,
     config: ConfigType,
-    discovery_info=None,
+    discovery_info: MQTTConfig = None,
 ) -> MqttNotificationService | None:
     """Prepare the MQTT notification service through configuration.yaml."""
     device_id: str | None = None

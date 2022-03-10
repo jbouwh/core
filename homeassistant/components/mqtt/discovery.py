@@ -26,6 +26,7 @@ from .const import (
     ATTR_DISCOVERY_TOPIC,
     CONF_AVAILABILITY,
     CONF_TOPIC,
+    DATA_MQTT_SETUP_CONFIG,
     DOMAIN,
 )
 
@@ -87,6 +88,8 @@ def set_discovery_hash(hass, discovery_hash):
 
 class MQTTConfig(dict):
     """Dummy class to allow adding attributes."""
+
+    discovery_data: dict
 
 
 async def async_start(  # noqa: C901
@@ -240,7 +243,7 @@ async def async_start(  # noqa: C901
                             hass,
                             Platform.NOTIFY,
                             DOMAIN,
-                            hass_config=config_entry,
+                            hass_config=hass.data[DATA_MQTT_SETUP_CONFIG],
                         )
                         await async_load_platform_helper(hass, "notify", notify_setup)
                     elif component in "tag":
