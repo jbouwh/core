@@ -394,6 +394,45 @@ async def test_with_same_name(hass, mqtt_mock, caplog):
         )
 
 
+async def test_discovery_with_same_name(hass, mqtt_mock, caplog):
+    """Test validation of notify service setup with the same name."""
+    # test if a new service with same name fails to setup
+    config1 = {
+        "command_topic": "command-topic-config.yaml",
+        "name": "test-setup1",
+        "platform": "mqtt",
+        "qos": "2",
+    }
+    assert await async_setup_component(
+        hass,
+        notify.DOMAIN,
+        {notify.DOMAIN: [config1]},
+    )
+    await hass.async_block_till_done()
+    data = '{ "name": "test-setup1", "command_topic": "test_topic" }'
+    async_fire_mqtt_message(
+        hass, f"homeassistant/{notify.DOMAIN}/test-setup1/config", data
+    )
+    await hass.async_block_till_done()
+    assert (
+        "Notify service 'test_setup1' already exists, cannot register service"
+        in caplog.text
+    )
+    await hass.services.async_call(
+        notify.DOMAIN,
+        "test_setup1",
+        {
+            notify.ATTR_TITLE: "Title",
+            notify.ATTR_MESSAGE: "Message",
+            notify.ATTR_TARGET: ["t2"],
+        },
+        blocking=True,
+    )
+    mqtt_mock.async_publish.assert_called_once_with(
+        "command-topic-config.yaml", "Message", 2, False
+    )
+
+
 async def test_discovery_without_device(hass, mqtt_mock, caplog):
     """Test discovery, update and removal of notify service without device."""
     data = '{ "name": "Old name", "command_topic": "test_topic" }'
@@ -481,42 +520,6 @@ async def test_discovery_without_device(hass, mqtt_mock, caplog):
         in caplog.text
     )
     caplog.clear()
-
-    # test if a new service with same name fails to setup
-    config1 = {
-        "command_topic": "command-topic-config.yaml",
-        "name": "test-setup1",
-        "platform": "mqtt",
-        "qos": "2",
-    }
-    assert await async_setup_component(
-        hass,
-        notify.DOMAIN,
-        {notify.DOMAIN: [config1]},
-    )
-    await hass.async_block_till_done()
-    data = '{ "name": "test-setup1", "command_topic": "test_topic" }'
-    async_fire_mqtt_message(
-        hass, f"homeassistant/{notify.DOMAIN}/test-setup1/config", data
-    )
-    await hass.async_block_till_done()
-    assert (
-        "Notify service 'test_setup1' already exists, cannot register service"
-        in caplog.text
-    )
-    await hass.services.async_call(
-        notify.DOMAIN,
-        "test_setup1",
-        {
-            notify.ATTR_TITLE: "Title",
-            notify.ATTR_MESSAGE: "Message",
-            notify.ATTR_TARGET: ["t2"],
-        },
-        blocking=True,
-    )
-    mqtt_mock.async_publish.assert_called_once_with(
-        "command-topic-config.yaml", "Message", 2, False
-    )
 
     # Test with same discovery on new name
     data = '{ "name": "testa", "command_topic": "test_topic_a" }'
@@ -844,7 +847,7 @@ async def test_reloadable(hass, mqtt_mock, caplog, tmp_path):
     assert "<Event event_mqtt_reloaded[L]>" in caplog.text
     caplog.clear()
 
-    # test if the auto discovered item survived the platform reload
+    # test if auto discovered item survived the platform reload
     await hass.services.async_call(
         notify.DOMAIN,
         "test_old_3",

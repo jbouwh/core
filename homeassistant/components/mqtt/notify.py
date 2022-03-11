@@ -41,6 +41,7 @@ from .discovery import (
 )
 from .mixins import (
     MQTT_ENTITY_DEVICE_INFO_SCHEMA,
+    async_removed_from_device,
     cleanup_device_registry,
     device_info_from_config,
 )
@@ -134,6 +135,8 @@ async def async_get_service(
     await async_initialize(hass)
     if discovery_info:
         # Setup through auto discovery
+        discovery_data = discovery_info.discovery_data
+        discovery_hash = discovery_data[ATTR_DISCOVERY_HASH]
         try:
             notification_config = DISCOVERY_SCHEMA(discovery_info)
         except Exception:
@@ -143,9 +146,6 @@ async def async_get_service(
                 hass, MQTT_DISCOVERY_DONE.format(discovery_hash), None
             )
             raise
-        device_id = _update_device(hass, config_entry, notification_config)
-        discovery_data = discovery_info.discovery_data
-        discovery_hash = discovery_data[ATTR_DISCOVERY_HASH]
     else:
         # Setup through configuration.yaml
         notification_config = cast(MqttNotificationConfig, config)
@@ -159,6 +159,11 @@ async def async_get_service(
             clear_discovery_hash(hass, discovery_hash)
         return None
 
+    device_id = (
+        _update_device(hass, config_entry, notification_config)
+        if discovery_info
+        else None
+    )
     service = hass.data[MQTT_NOTIFY_SERVICES_SETUP][
         service_name
     ] = MqttNotificationService(
@@ -201,37 +206,35 @@ class MqttNotificationServiceUpdater:
 
         async def async_device_removed(event):
             """Handle the removal of a device."""
-            device_id = event.data["device_id"]
-            if (
-                event.data["action"] != "remove"
-                or device_id != service.device_id
-                or self._device_removed
+            nonlocal _device_removed
+            if _device_removed or not async_removed_from_device(
+                hass, event, service.device_id, service.config_entry.entry_id
             ):
                 return
-            self._device_removed = True
+            _device_removed = True
             await async_tear_down_service()
 
         async def async_tear_down_service():
             """Handle the removal of the service."""
+            nonlocal _device_removed
             services = hass.data[MQTT_NOTIFY_SERVICES_SETUP]
-            if self._service.service_name in services.keys():
-                del services[self._service.service_name]
-            if not self._device_removed and service.config_entry:
-                self._device_removed = True
+            if service.service_name in services.keys():
+                del services[service.service_name]
+            if not _device_removed and service.config_entry:
+                _device_removed = True
                 await cleanup_device_registry(
                     hass, service.device_id, service.config_entry.entry_id
                 )
             clear_discovery_hash(hass, service.discovery_hash)
-            self._remove_discovery()
+            _remove_discovery()
             await service.async_unregister_services()
             _LOGGER.info(
                 "Notify service %s has been removed",
                 service.discovery_hash,
             )
-            del self._service
 
-        self._service = service
-        self._remove_discovery = async_dispatcher_connect(
+        _device_removed = False
+        _remove_discovery = async_dispatcher_connect(
             hass,
             MQTT_DISCOVERY_UPDATED.format(service.discovery_hash),
             async_discovery_update,
@@ -240,7 +243,6 @@ class MqttNotificationServiceUpdater:
             self._remove_device_updated = hass.bus.async_listen(
                 EVENT_DEVICE_REGISTRY_UPDATED, async_device_removed
             )
-        self._device_removed = False
         async_dispatcher_send(
             hass, MQTT_DISCOVERY_DONE.format(service.discovery_hash), None
         )
