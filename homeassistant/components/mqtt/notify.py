@@ -113,13 +113,25 @@ def _check_notify_service_name(
     service_name = slugify(config[CONF_NAME])
     has_services = hass.services.has_service(notify.DOMAIN, service_name)
     services = hass.data[MQTT_NOTIFY_SERVICES_SETUP]
-    if service_name in services.keys() or has_services:
+    if service_name in services or has_services:
         _LOGGER.error(
             "Notify service '%s' already exists, cannot register service",
             service_name,
         )
         return None
     return service_name
+
+
+def _check_exiting_discovered_notify_service(
+    hass: HomeAssistant, config: MqttNotificationConfig, discovery_hash: tuple | None
+) -> MqttNotificationService | None:
+    """Check if a discovered service already exists."""
+    if discovery_hash is None:
+        return None
+    service_name = slugify(config[CONF_NAME])
+    services = hass.data[MQTT_NOTIFY_SERVICES_SETUP]
+    service = services.get(service_name)
+    return service if service and service.discovery_hash == discovery_hash else None
 
 
 async def async_get_service(
@@ -150,8 +162,16 @@ async def async_get_service(
         # Setup through configuration.yaml
         notification_config = cast(MqttNotificationConfig, config)
 
-    if not (service_name := _check_notify_service_name(hass, notification_config)):
-        # A service already exist, abort the setup
+    # Check for previous discovered services after a reload
+    service = _check_exiting_discovered_notify_service(
+        hass, notification_config, discovery_hash
+    )
+
+    # Make sure the service_name is unique
+    if not service and not (
+        service_name := _check_notify_service_name(hass, notification_config)
+    ):
+        # A service with the same name already exist, abort the setup
         if discovery_hash is not None:
             async_dispatcher_send(
                 hass, MQTT_DISCOVERY_DONE.format(discovery_hash), None
@@ -164,15 +184,16 @@ async def async_get_service(
         if discovery_info
         else None
     )
-    service = hass.data[MQTT_NOTIFY_SERVICES_SETUP][
-        service_name
-    ] = MqttNotificationService(
-        hass,
-        notification_config,
-        config_entry=config_entry,
-        device_id=device_id,
-        discovery_hash=discovery_hash,
-    )
+    if service is None:
+        service = hass.data[MQTT_NOTIFY_SERVICES_SETUP][
+            service_name
+        ] = MqttNotificationService(
+            hass,
+            notification_config,
+            config_entry=config_entry,
+            device_id=device_id,
+            discovery_hash=discovery_hash,
+        )
     return service
 
 
@@ -304,26 +325,28 @@ class MqttNotificationService(notify.BaseNotificationService):
     ) -> None:
         """Update the notify service through auto discovery."""
         config: MqttNotificationConfig = DISCOVERY_SCHEMA(discovery_payload)
-        # Do not rename a service if that service_name is already in use
+        # Fail if the new service name is already in use
         if (
             new_service_name := slugify(config[CONF_NAME])
         ) != self._service_name and _check_notify_service_name(
             self.hass, config
         ) is None:
             return
-        # Only refresh services if service name or targets have changes
-        if (
-            new_service_name != self._service_name
+        # We need to reregister the services
+        reintitialize = (
+            not self.hass.services.has_service(notify.DOMAIN, self._service_name)
             or config[CONF_TARGETS] != self._config[CONF_TARGETS]
-        ):
+        )
+        rename_only = new_service_name != self._service_name
+        if rename_only or reintitialize:
             services = self.hass.data[MQTT_NOTIFY_SERVICES_SETUP]
             await self.async_unregister_services()
-            if self._service_name in services:
+            if rename_only and self._service_name in services:
                 del services[self._service_name]
             self._config = config
             await self.async_setup(self.hass, new_service_name, new_service_name)
-            await self.async_register_services()
             services[new_service_name] = self
+            await self.async_register_services()
         else:
             self._config = config
         self._commmand_template = MqttCommandTemplate(

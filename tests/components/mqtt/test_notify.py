@@ -847,6 +847,10 @@ async def test_reloadable(hass, mqtt_mock, caplog, tmp_path):
     assert "<Event event_mqtt_reloaded[L]>" in caplog.text
     caplog.clear()
 
+    # rediscover the discovered service
+    async_fire_mqtt_message(hass, f"homeassistant/{notify.DOMAIN}/bla/config", data)
+    await hass.async_block_till_done()
+
     # test if auto discovered item survived the platform reload
     await hass.services.async_call(
         notify.DOMAIN,
