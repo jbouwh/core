@@ -134,7 +134,15 @@ async def async_get_service(
     await async_initialize(hass)
     if discovery_info:
         # Setup through auto discovery
-        notification_config = DISCOVERY_SCHEMA(discovery_info)
+        try:
+            notification_config = DISCOVERY_SCHEMA(discovery_info)
+        except Exception:
+            # Cleanup discovery session because of invalid config
+            clear_discovery_hash(hass, discovery_hash)
+            async_dispatcher_send(
+                hass, MQTT_DISCOVERY_DONE.format(discovery_hash), None
+            )
+            raise
         device_id = _update_device(hass, config_entry, notification_config)
         discovery_data = discovery_info.discovery_data
         discovery_hash = discovery_data[ATTR_DISCOVERY_HASH]
