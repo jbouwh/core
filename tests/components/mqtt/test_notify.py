@@ -466,7 +466,6 @@ async def test_discovery_without_device(hass, mqtt_mock, caplog):
     assert (
         "<Event service_registered[L]: domain=notify, service=new_name>" in caplog.text
     )
-    assert "Notify service ('notify', 'bla') updated has been processed" in caplog.text
 
     await hass.services.async_call(
         notify.DOMAIN,
@@ -736,7 +735,6 @@ async def test_publishing_with_custom_encoding(hass, mqtt_mock, caplog):
     async_fire_mqtt_message(hass, f"homeassistant/{notify.DOMAIN}/bla/config", data)
     await hass.async_block_till_done()
 
-    assert "Notify service ('notify', 'bla') has been initialized" in caplog.text
     assert "<Event service_registered[L]: domain=notify, service=test2>" in caplog.text
 
     await hass.services.async_call(
@@ -771,7 +769,7 @@ async def test_publishing_with_custom_encoding(hass, mqtt_mock, caplog):
     async_fire_mqtt_message(hass, f"homeassistant/{notify.DOMAIN}/bla/config", "")
     await hass.async_block_till_done()
 
-    assert "Notify service ('notify', 'bla') has been removed" in caplog.text
+    assert "<Event service_removed[L]: domain=notify, service=test3>" in caplog.text
 
 
 async def test_reloadable(hass, mqtt_mock, caplog, tmp_path):
@@ -804,7 +802,6 @@ async def test_reloadable(hass, mqtt_mock, caplog, tmp_path):
     async_fire_mqtt_message(hass, f"homeassistant/{notify.DOMAIN}/bla/config", data)
     await hass.async_block_till_done()
 
-    assert "Notify service ('notify', 'bla') has been initialized" in caplog.text
     assert (
         "<Event service_registered[L]: domain=notify, service=test_old_3>"
         in caplog.text
@@ -873,4 +870,6 @@ async def test_reloadable(hass, mqtt_mock, caplog, tmp_path):
     async_fire_mqtt_message(hass, f"homeassistant/{notify.DOMAIN}/bla/config", "")
     await hass.async_block_till_done()
 
-    assert "Notify service ('notify', 'bla') has been removed" in caplog.text
+    assert (
+        "<Event service_removed[L]: domain=notify, service=test_old_3>" in caplog.text
+    )

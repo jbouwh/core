@@ -529,9 +529,9 @@ class MqttDiscoveryDeviceUpdateService:
         self,
         hass: HomeAssistant,
         log_name: str,
-        discovery_data: dict[str, Any] | None = None,
-        device_id: str | None = None,
-        config_entry: ConfigEntry | None = None,
+        discovery_data: dict[str, Any] | None,
+        device_id: str | None,
+        config_entry: ConfigEntry,
     ) -> None:
         """Initialize the update service."""
 
@@ -540,6 +540,7 @@ class MqttDiscoveryDeviceUpdateService:
             return
 
         self.hass = hass
+        config_entry_id = config_entry.entry_id
         discovery_hash = discovery_data[ATTR_DISCOVERY_HASH]
         discovery_topic = discovery_data[ATTR_DISCOVERY_TOPIC]
         _device_removed: bool = False
@@ -559,7 +560,7 @@ class MqttDiscoveryDeviceUpdateService:
             # update the service through auto discovery
             await self.async_discovery_update(discovery_payload)
             _LOGGER.debug(
-                "%s %s updated has been processed",
+                "%s %s update has been processed",
                 log_name,
                 discovery_hash,
             )
@@ -570,11 +571,9 @@ class MqttDiscoveryDeviceUpdateService:
         async def async_device_removed(event):
             """Handle the removal of a device."""
             nonlocal _device_removed
-            event_device_id = event.data["device_id"]
-            if (
-                event.data["action"] != "remove"
-                or event_device_id != device_id
-                or _device_removed
+            nonlocal _device_removed
+            if _device_removed or not async_removed_from_device(
+                hass, event, device_id, config_entry_id
             ):
                 return
             _device_removed = True
@@ -589,7 +588,7 @@ class MqttDiscoveryDeviceUpdateService:
             # remove the service for auto discovery updates and clean up the device registry
             if not _device_removed and config_entry:
                 _device_removed = True
-                await cleanup_device_registry(hass, device_id, config_entry.entry_id)
+                await cleanup_device_registry(hass, device_id, config_entry_id)
             clear_discovery_hash(hass, discovery_hash)
             _remove_discovery()
             _LOGGER.info(
