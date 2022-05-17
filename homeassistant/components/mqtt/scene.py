@@ -21,14 +21,16 @@ from .mixins import (
     CONF_OBJECT_ID,
     MQTT_AVAILABILITY_SCHEMA,
     MqttEntity,
+    async_get_platform_config_from_yaml,
     async_setup_entry_helper,
     async_setup_platform_helper,
+    validate_modern_schema,
 )
 
 DEFAULT_NAME = "MQTT Scene"
 DEFAULT_RETAIN = False
 
-PLATFORM_SCHEMA = mqtt.MQTT_BASE_PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA_MODERN = mqtt.MQTT_BASE_SCHEMA.extend(
     {
         vol.Required(CONF_COMMAND_TOPIC): mqtt.valid_publish_topic,
         vol.Optional(CONF_ICON): cv.icon,
@@ -42,7 +44,13 @@ PLATFORM_SCHEMA = mqtt.MQTT_BASE_PLATFORM_SCHEMA.extend(
     }
 ).extend(MQTT_AVAILABILITY_SCHEMA.schema)
 
-DISCOVERY_SCHEMA = PLATFORM_SCHEMA.extend({}, extra=vol.REMOVE_EXTRA)
+# The use of PLATFORM_SCHEMA is deprecated in HA Core 2022.6
+PLATFORM_SCHEMA = vol.All(
+    cv.PLATFORM_SCHEMA.extend(PLATFORM_SCHEMA_MODERN.schema),
+    validate_modern_schema(scene.DOMAIN),
+)
+
+DISCOVERY_SCHEMA = PLATFORM_SCHEMA_MODERN.extend({}, extra=vol.REMOVE_EXTRA)
 
 
 async def async_setup_platform(
@@ -51,7 +59,8 @@ async def async_setup_platform(
     async_add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
-    """Set up MQTT scene through configuration.yaml."""
+    """Set up MQTT scene through configuration.yaml (deprecated)."""
+    # Deprecated in HA Core 2022.6
     await async_setup_platform_helper(
         hass, scene.DOMAIN, config, async_add_entities, _async_setup_entity
     )
@@ -62,7 +71,13 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up MQTT scene dynamically through MQTT discovery."""
+    """Set up MQTT scene through configuration.yaml and dynamically through MQTT discovery."""
+    # load and initialize platform config from configuration.yaml
+    for config in await async_get_platform_config_from_yaml(
+        hass, scene.DOMAIN, PLATFORM_SCHEMA_MODERN
+    ):
+        await _async_setup_entity(hass, async_add_entities, config, config_entry)
+    # setup for discovery
     setup = functools.partial(
         _async_setup_entity, hass, async_add_entities, config_entry=config_entry
     )
