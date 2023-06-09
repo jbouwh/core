@@ -290,12 +290,19 @@ async def async_setup_entry_helper(
             # The platform has been reloaded
             config_yaml = mqtt_data.updated_config
         else:
-            config_yaml = mqtt_data.config or {}
+            config_yaml = mqtt_data.config or []
         if not config_yaml:
             return
-        if domain not in config_yaml:
+        setups: list[Coroutine[Any, Any, None]] = [
+            async_setup(config)
+            for config_item in config_yaml
+            for config_domain, configs in config_item.items()
+            for config in configs
+            if config_domain == domain
+        ]
+        if not setups:
             return
-        await asyncio.gather(*[async_setup(config) for config in config_yaml[domain]])
+        await asyncio.gather(*setups)
 
     # discover manual configured MQTT items
     mqtt_data.reload_handlers[domain] = _async_setup_entities
