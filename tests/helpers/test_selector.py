@@ -9,7 +9,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 import voluptuous as vol
 
-from homeassistant.const import DEGREE, UnitOfTemperature
+from homeassistant.const import DEGREE, PERCENTAGE, UnitOfTemperature
 from homeassistant.helpers import selector
 from homeassistant.util import yaml as yaml_util
 
@@ -1796,16 +1796,18 @@ def test_state_class_selector_schema(
     [
         (None, does_not_raise()),
         ({}, does_not_raise()),
-        ({"state_class": "total"}, does_not_raise()),
-        ({"state_class": None}, does_not_raise()),
-        ({"state_class": "invalid"}, pytest.raises(vol.Invalid)),
-        ({"state_class": ["total"]}, pytest.raises(vol.Invalid)),
-        ({"device_class": None}, does_not_raise()),
-        ({"device_class": "date"}, does_not_raise()),
-        ({"device_class": "enum"}, does_not_raise()),
-        ({"device_class": "temperature"}, does_not_raise()),
-        ({"device_class": "invalid"}, pytest.raises(vol.Invalid)),
-        ({"device_class": ["temperature"]}, pytest.raises(vol.Invalid)),
+        ({"state_classes": "total"}, does_not_raise()),
+        ({"state_classes": None}, does_not_raise()),
+        ({"state_classes": "invalid"}, pytest.raises(vol.Invalid)),
+        ({"state_classes": ["total"]}, does_not_raise()),
+        ({"state_classes": ["invalid"]}, pytest.raises(vol.Invalid)),
+        ({"device_classes": None}, does_not_raise()),
+        ({"device_classes": "date"}, does_not_raise()),
+        ({"device_classes": "enum"}, does_not_raise()),
+        ({"device_classes": "temperature"}, does_not_raise()),
+        ({"device_classes": "invalid"}, pytest.raises(vol.Invalid)),
+        ({"device_classes": ["temperature", "humidity"]}, does_not_raise()),
+        ({"device_classes": ["invalid"]}, pytest.raises(vol.Invalid)),
     ],
 )
 def test_uom_selector_validate_schema(
@@ -1842,7 +1844,7 @@ def test_uom_selector_validate_schema(
             (),
         ),
         (
-            {"device_class": "temperature"},
+            {"device_classes": "temperature"},
             (
                 UnitOfTemperature.KELVIN,
                 UnitOfTemperature.CELSIUS,
@@ -1851,7 +1853,7 @@ def test_uom_selector_validate_schema(
             ("cats", "dogs", DEGREE),
         ),
         (
-            {"device_class": "enum"},
+            {"device_classes": "enum"},
             (),
             (
                 "cats",
@@ -1863,7 +1865,7 @@ def test_uom_selector_validate_schema(
             ),
         ),
         (
-            {"device_class": "date"},
+            {"device_classes": "date"},
             (),
             (
                 "cats",
@@ -1875,7 +1877,7 @@ def test_uom_selector_validate_schema(
             ),
         ),
         (
-            {"state_class": "measurement"},
+            {"state_classes": "measurement"},
             (
                 UnitOfTemperature.KELVIN,
                 UnitOfTemperature.CELSIUS,
@@ -1886,7 +1888,7 @@ def test_uom_selector_validate_schema(
             (),
         ),
         (
-            {"state_class": "measurement_angle"},
+            {"state_classes": "measurement_angle"},
             (DEGREE),
             (
                 UnitOfTemperature.KELVIN,
@@ -1897,7 +1899,7 @@ def test_uom_selector_validate_schema(
             ),
         ),
         (
-            {"device_class": "wind_direction", "state_class": "measurement_angle"},
+            {"device_classes": "wind_direction", "state_classes": "measurement_angle"},
             (DEGREE),
             (
                 UnitOfTemperature.KELVIN,
@@ -1908,7 +1910,7 @@ def test_uom_selector_validate_schema(
             ),
         ),
         (
-            {"device_class": "temperature", "state_class": "measurement"},
+            {"device_classes": "temperature", "state_classes": "measurement"},
             (
                 UnitOfTemperature.KELVIN,
                 UnitOfTemperature.CELSIUS,
@@ -1917,8 +1919,39 @@ def test_uom_selector_validate_schema(
             ("cats", "dogs", DEGREE),
         ),
         (
-            {"device_class": "temperature", "state_class": "measurement_angle"},
+            {"device_classes": "temperature", "state_classes": "measurement_angle"},
             (),
+            (
+                "cats",
+                "dogs",
+                DEGREE,
+                UnitOfTemperature.KELVIN,
+                UnitOfTemperature.CELSIUS,
+                UnitOfTemperature.FAHRENHEIT,
+            ),
+        ),
+        (
+            {
+                "device_classes": ["battery", "humidity"],
+                "state_classes": ["measurement_angle", "measurement"],
+            },
+            (),
+            (
+                "cats",
+                "dogs",
+                DEGREE,
+                PERCENTAGE,
+                UnitOfTemperature.KELVIN,
+                UnitOfTemperature.CELSIUS,
+                UnitOfTemperature.FAHRENHEIT,
+            ),
+        ),
+        (
+            {
+                "device_classes": ["battery", "humidity"],
+                "state_classes": ["measurement"],
+            },
+            (PERCENTAGE),
             (
                 "cats",
                 "dogs",
